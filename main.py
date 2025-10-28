@@ -1,8 +1,12 @@
 import pygame
 import sys
 import random
+import os # ファイル操作のために追加
 
 pygame.init()
+
+# ミキサー（音）の初期化
+pygame.mixer.init()
 
 # 画面サイズ
 WIDTH, HEIGHT = 800, 400
@@ -18,6 +22,43 @@ BLUE = (50, 100, 255)
 RED = (255, 80, 80)
 BLACK = (0, 0, 0)
 GREEN = (80, 180, 80)
+
+# ハイスコア機能のための関数と設定
+HIGHSCORE_FILE = "highscore.txt"
+
+def load_highscore():
+    """
+    ハイスコアファイルを読み込み、スコアを返す。ファイルがなければ 0 を返す。
+    """
+    if os.path.exists(HIGHSCORE_FILE):
+        with open(HIGHSCORE_FILE, "r") as f:
+            try:
+                # ファイルから読み込んだ文字列を整数に変換
+                return int(f.read())
+            except ValueError: # ファイル内容が数字でなかった場合
+                return 0
+    return 0
+
+def save_highscore(score):
+    """
+    新しいハイスコアをファイルに書き込む。
+    """
+    with open(HIGHSCORE_FILE, "w") as f:
+        f.write(str(score))
+# ==================================
+
+# 音声ファイルのロード
+try:
+    # BGM（メインループで再生）
+    pygame.mixer.music.load("~~~.mp3")  #ここにメインbgmのファイル名を入れる
+    # # 効果音
+    jump_sound = pygame.mixer.Sound("---.mp3")  #ここにジャンプの効果音のファイル名を入れる
+    game_over_sound = pygame.mixer.Sound("===.mp3")  #ここにゲームオーバー時に流すbgmファイル名を入れる
+except pygame.error as e:
+    print(f"音楽ファイルのロードに失敗しました: {e}")
+    # ファイルが見つからない場合は、エラーを無視してゲームを続行
+    jump_sound = None
+    game_over_sound = None
 
 # 床
 floor_y = HEIGHT - 40
@@ -44,9 +85,14 @@ enemy_spawn_timer = 0
 font = pygame.font.SysFont(None, 40)
 score = 0
 distance = 0
+high_score = load_highscore() # <-- 起動時にハイスコアをロード
 
 # ゲーム状態
 game_over = False
+
+# BGMの再生開始 (ループ再生: -1)
+if pygame.mixer.music.get_busy() == False:
+    pygame.mixer.music.play(-1)
 
 def reset_game():
     global player_x, player_y, player_vel_y, on_ground, bg_scroll, enemy_list, score, distance, game_over
@@ -59,6 +105,10 @@ def reset_game():
     score = 0
     distance = 0
     game_over = False
+    
+    # BGMの再生再開
+    if not pygame.mixer.music.get_busy():
+        pygame.mixer.music.play(-1)
 
 # メインループ
 while True:
@@ -79,6 +129,9 @@ while True:
         if keys[pygame.K_SPACE] and on_ground:
             player_vel_y = jump_power
             on_ground = False
+            # ジャンプ効果音の再生
+            if jump_sound:
+                jump_sound.play()
 
         # 重力
         player_y += player_vel_y
@@ -120,6 +173,20 @@ while True:
             enemy_rect = pygame.Rect(enemy[0], enemy[1], *enemy_size)
             if player_rect.colliderect(enemy_rect):
                 game_over = True
+                
+                # ==================================================
+                # ハイスコア更新チェックと保存
+                if score > high_score:
+                    high_score = score
+                    save_highscore(high_score)
+                # ==================================================
+                
+                # ゲームオーバー時の処理
+                # BGMの停止
+                pygame.mixer.music.stop()
+                # ゲームオーバー効果音の再生
+                if game_over_sound:
+                    game_over_sound.play()
 
     # ===== 描画 =====
     # 背景（床のスクロール）
@@ -137,9 +204,21 @@ while True:
     score_text = font.render(f"Score: {score}", True, BLACK)
     screen.blit(score_text, (10, 10))
 
+    # ==================================================
+    # ハイスコア表示
+    highscore_text = font.render(f"High Score: {high_score}", True, BLACK)
+    # 画面右上に表示
+    screen.blit(highscore_text, (WIDTH - highscore_text.get_width() - 10, 10))
+    # ==================================================
+
     # ゲームオーバー表示
     if game_over:
         over_text = font.render("GAME OVER - Press R to Restart", True, RED)
         screen.blit(over_text, (WIDTH//2 - 220, HEIGHT//2 - 20))
+        
+        # ゲームオーバー時にハイスコアを更新した場合は強調表示
+        if score == high_score:
+             new_record_text = font.render("NEW HIGH SCORE!", True, RED)
+             screen.blit(new_record_text, (WIDTH//2 - new_record_text.get_width()//2, HEIGHT//2 + 30))
 
     pygame.display.update()
