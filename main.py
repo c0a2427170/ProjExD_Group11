@@ -28,8 +28,13 @@ player_x = 100
 player_y = floor_y - player_size[1]
 player_vel_y = 0
 gravity = 0.8
-jump_power = -15
+jump_power = -15 # 通常ジャンプの力
+double_jump_power = -10 # 2段目ジャンプの力(弱ジャンプ)
 on_ground = True
+
+# 2段ジャンプ用
+jump_count = 0          # 現在のジャンプ回数
+max_jumps = 2           # 最大ジャンプ回数（2段ジャンプ）
 
 # 背景スクロール
 bg_scroll = 0
@@ -59,6 +64,7 @@ def reset_game():
     score = 0
     distance = 0
     game_over = False
+    jump_count = 0
 
 # メインループ
 while True:
@@ -72,17 +78,29 @@ while True:
             sys.exit()
         if game_over and event.type == pygame.KEYDOWN and event.key == pygame.K_r:
             reset_game()
+        
+        if not game_over and event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_SPACE:
+                if jump_count < max_jumps:
+                    # 1段目 or 2段目を区別
+                    if jump_count == 0:
+                        player_vel_y = jump_power
+                    else:
+                        player_vel_y = double_jump_power
+                    jump_count += 1
+                    on_ground = False
 
     keys = pygame.key.get_pressed()
     if not game_over:
-        # ジャンプ
-        if keys[pygame.K_SPACE]:
-            if on_ground: #地上でのジャンプ
-                player_vel_y = jump_power
-                on_ground = False
-            else: #空中でのジャンプ
-                player_vel_y = jump_power/2
-                on_ground = False
+        # # ジャンプ
+        # if keys[pygame.K_SPACE]:
+        #     if jump_count < max_jumps:
+        #         if jump_count == 0:
+        #             player_vel_y = jump_power  # 1段目
+        #         else:
+        #             player_vel_y = double_jump_power  # 2段目(弱ジャンプ)
+        #         jump_count += 1
+        #         on_ground = False
 
         # 重力
         player_y += player_vel_y
@@ -93,6 +111,8 @@ while True:
             player_y = floor_y - player_size[1]
             player_vel_y = 0
             on_ground = True
+            jump_count = 0 # 地面に着いたらジャンプ回数をリセット
+
 
         # 背景スクロール
         bg_scroll -= bg_speed
