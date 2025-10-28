@@ -76,9 +76,13 @@ while True:
     keys = pygame.key.get_pressed()
     if not game_over:
         # ジャンプ
-        if keys[pygame.K_SPACE] and on_ground:
-            player_vel_y = jump_power
-            on_ground = False
+        if keys[pygame.K_SPACE]:
+            if on_ground: #地上でのジャンプ
+                player_vel_y = jump_power
+                on_ground = False
+            else: #空中でのジャンプ
+                player_vel_y = jump_power/2
+                on_ground = False
 
         # 重力
         player_y += player_vel_y
