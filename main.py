@@ -39,15 +39,17 @@ bg_speed = 4
 enemy_size = (40, 40)
 enemy_list = []
 enemy_spawn_timer = 0
+jump_enemy_list = []
+jump_enemy_spawn_timer = 0
 
-class BigEnemy:
+class Enemy:
     def __init__(self, x, y, score):
-        self.normal_size = (40, 40)
-        self.big_size = (60, 60)
+        self.normal_size = (40, 40)  #通常サイズの敵も入れる
+        self.big_size = (60, 60)  #大きいサイズの敵
         self.x = x
         self.y = y
 
-        if score >= 500 and random.random() < 0.3:
+        if score >= 1000 and random.random() < 0.3:
             self.size = self.big_size
             self.type = "big"
             self.y = floor_y - self.size[1]  #敵の高さ
@@ -63,6 +65,44 @@ class BigEnemy:
         color = RED if self.type == "normal" else (180, 0, 0)  #大きい敵なら濃い赤色に
         pygame.draw.rect(screen, color, (self.x, self.y, *self.size))  #四角の左上x,y座標を展開
 
+class EnemyJump:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+        self.size = 40
+        self.color = RED
+        self.vel_y = 0
+        self.on_ground = True
+        self.glow = False
+
+    def update(self, speed):
+        self.x -= speed  # 横移動
+
+        # 光る条件
+        if 0 < self.x < 250:  # 画面手前で光る
+
+            self.glow = True
+            # 光ったらジャンプ（1回だけ）
+            if self.on_ground:
+                self.vel_y = -23  #負の値が上方向なため大きいほどジャンプ力が大きくなる
+                self.on_ground = False  #jumpしたため地面にいない状態
+        else:
+            self.glow = False  #画面手前にいないときは赤色のまま
+
+        # 重力
+        if not self.on_ground:  #空中にいるとき
+            self.vel_y += 0.8   #重力を加算していく(下方向の加速度)
+            self.y += self.vel_y  #位置更新
+            if self.y + self.size >= floor_y:  #敵の下端が床の座標に到達したら
+                self.y = floor_y - self.size  #床に接する位置に修正
+                self.vel_y = 0  #重力リセット
+                self.on_ground = True  #再度ジャンプ可能状態
+
+    def draw(self, screen):
+        color = (255, 255, 0) if self.glow else self.color  #光っているとき黄色
+        pygame.draw.rect(screen, color, (self.x, self.y, self.size, self.size))  #四角形(画面描画,色,(左上の座標,幅と高さは正方形のため同じ))
+
+
 
 # スコア
 font = pygame.font.SysFont(None, 40)
@@ -74,12 +114,14 @@ game_over = False
 
 def reset_game():
     global player_x, player_y, player_vel_y, on_ground, bg_scroll, enemy_list, score, distance, game_over
+    global enemy_list, jump_enemy_list, score, distance, game_over
     player_x = 100
     player_y = floor_y - player_size[1]
     player_vel_y = 0
     on_ground = True
     bg_scroll = 0
     enemy_list = []
+    jump_enemy_list = []
     score = 0
     distance = 0
     game_over = False
@@ -122,18 +164,31 @@ while True:
 
         # 敵生成
         enemy_spawn_timer += 1
-        if enemy_spawn_timer > 90:
+        if enemy_spawn_timer > 100:
             enemy_x = WIDTH + random.randint(0, 300)
             enemy_y = floor_y - enemy_size[1]
-            enemy_list.append(BigEnemy(enemy_x, enemy_y, score))  #敵が大きいか小さいかが自動で決まる
+            enemy_list.append(Enemy(enemy_x, enemy_y, score))  #敵が大きいか小さいかが自動で決まる
             enemy_spawn_timer = 0
+
+        # EnemyJump 生成
+        jump_enemy_spawn_timer += 1
+        if score >= 500 and jump_enemy_spawn_timer > 500:  # 500フレームごとに出現
+            enemy_x = WIDTH + random.randint(0, 200)
+            enemy_y = floor_y - 40
+            jump_enemy_list.append(EnemyJump(enemy_x, enemy_y))
+            jump_enemy_spawn_timer = 0
 
         # 敵移動
         for enemy in enemy_list:
             enemy.x -= bg_speed
 
+        #発光ジャンプ
+        for enemy in jump_enemy_list:
+            enemy.update(bg_speed)  # 横移動＋ジャンプ＋重力
+
         # 敵削除
         enemy_list = [e for e in enemy_list if e.x > -e.size[0]]
+        jump_enemy_list = [e for e in jump_enemy_list if e.x + e.size > 0]
 
         # スコア・距離
         distance += bg_speed / 10
@@ -143,6 +198,10 @@ while True:
         player_rect = pygame.Rect(player_x, player_y, *player_size)
         for enemy in enemy_list:
             if player_rect.colliderect(enemy.get_rect()):
+                game_over = True
+        
+        for enemy in jump_enemy_list:
+            if player_rect.colliderect(pygame.Rect(enemy.x, enemy.y, enemy.size, enemy.size)):
                 game_over = True
 
     # ===== 描画 =====
@@ -156,6 +215,10 @@ while True:
     # 敵
     for enemy in enemy_list:
         enemy.draw(screen)
+
+    #ジャンプする敵
+    for enemy in jump_enemy_list:
+        enemy.draw(screen)  # 光る敵も描画
 
     # スコア表示
     score_text = font.render(f"Score: {score}", True, BLACK)
