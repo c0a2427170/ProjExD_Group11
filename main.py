@@ -40,6 +40,30 @@ enemy_size = (40, 40)
 enemy_list = []
 enemy_spawn_timer = 0
 
+class BigEnemy:
+    def __init__(self, x, y, score):
+        self.normal_size = (40, 40)
+        self.big_size = (60, 60)
+        self.x = x
+        self.y = y
+
+        if score >= 500 and random.random() < 0.3:
+            self.size = self.big_size
+            self.type = "big"
+            self.y = floor_y - self.size[1]  #敵の高さ
+        else:
+            self.size = self.normal_size
+            self.type = "normal"
+            self.y = floor_y - self.size[1]
+
+    def get_rect(self):
+        return pygame.Rect(self.x, self.y, *self.size)  #衝突判定
+
+    def draw(self, screen):
+        color = RED if self.type == "normal" else (180, 0, 0)  #大きい敵なら濃い赤色に
+        pygame.draw.rect(screen, color, (self.x, self.y, *self.size))  #四角の左上x,y座標を展開
+
+
 # スコア
 font = pygame.font.SysFont(None, 40)
 score = 0
@@ -59,6 +83,7 @@ def reset_game():
     score = 0
     distance = 0
     game_over = False
+
 
 # メインループ
 while True:
@@ -100,15 +125,15 @@ while True:
         if enemy_spawn_timer > 90:
             enemy_x = WIDTH + random.randint(0, 300)
             enemy_y = floor_y - enemy_size[1]
-            enemy_list.append([enemy_x, enemy_y])
+            enemy_list.append(BigEnemy(enemy_x, enemy_y, score))  #敵が大きいか小さいかが自動で決まる
             enemy_spawn_timer = 0
 
         # 敵移動
         for enemy in enemy_list:
-            enemy[0] -= bg_speed
+            enemy.x -= bg_speed
 
         # 敵削除
-        enemy_list = [e for e in enemy_list if e[0] > -enemy_size[0]]
+        enemy_list = [e for e in enemy_list if e.x > -e.size[0]]
 
         # スコア・距離
         distance += bg_speed / 10
@@ -117,8 +142,7 @@ while True:
         # 衝突判定
         player_rect = pygame.Rect(player_x, player_y, *player_size)
         for enemy in enemy_list:
-            enemy_rect = pygame.Rect(enemy[0], enemy[1], *enemy_size)
-            if player_rect.colliderect(enemy_rect):
+            if player_rect.colliderect(enemy.get_rect()):
                 game_over = True
 
     # ===== 描画 =====
@@ -131,7 +155,7 @@ while True:
 
     # 敵
     for enemy in enemy_list:
-        pygame.draw.rect(screen, RED, (enemy[0], enemy[1], *enemy_size))
+        enemy.draw(screen)
 
     # スコア表示
     score_text = font.render(f"Score: {score}", True, BLACK)
