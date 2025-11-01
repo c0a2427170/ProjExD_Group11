@@ -41,15 +41,36 @@ enemy_list = []
 enemy_spawn_timer = 0
 jump_enemy_list = []
 jump_enemy_spawn_timer = 0
+current_speed = bg_speed
 
 class Enemy:
-    def __init__(self, x, y, score):
+    """通常の地上敵。score に応じて一定確率で大きい敵になる。
+
+    Attributes
+    ----------
+    x, y : int
+        敵の左上座標
+    size : tuple[int, int]
+        (幅, 高さ)
+    type : str
+        "normal" または "big"
+    """
+    def __init__(self, x: int, y: int, score: int) -> None:
+        """Enemy を初期化する。
+
+        Parameters
+        ----------
+        x, y : int
+            初期座標（通常は画面右外）
+        score : int
+            現在のスコア（大きい敵の出現判定に使用）
+        """
         self.normal_size = (40, 40)  #通常サイズの敵も入れる
         self.big_size = (60, 60)  #大きいサイズの敵
         self.x = x
         self.y = y
 
-        if score >= 1000 and random.random() < 0.3:
+        if score >= 1000 and random.random() < 0.3:  #score1000以上の時30%の確率で大きい敵が出現
             self.size = self.big_size
             self.type = "big"
             self.y = floor_y - self.size[1]  #敵の高さ
@@ -58,15 +79,29 @@ class Enemy:
             self.type = "normal"
             self.y = floor_y - self.size[1]
 
-    def get_rect(self):
+    def get_rect(self) -> pygame.Rect:
+        """衝突判定用の矩形を返す。"""
         return pygame.Rect(self.x, self.y, *self.size)  #衝突判定
 
-    def draw(self, screen):
+    def draw(self, screen: pygame.Surface) -> None:
+        """敵を描画する。"""
         color = RED if self.type == "normal" else (180, 0, 0)  #大きい敵なら濃い赤色に
         pygame.draw.rect(screen, color, (self.x, self.y, *self.size))  #四角の左上x,y座標を展開
 
 class EnemyJump:
-    def __init__(self, x, y):
+    """画面手前で光り、着地状態なら勝手にジャンプする敵。
+
+    - 光る距離は固定（0 < x < 250）
+    - ジャンプは on_ground が True のときに一回だけ発動し、着地で再度可能になる
+    """
+    def __init__(self, x: int, y: int) -> None:
+        """EnemyJump を初期化する。
+
+        Parameters
+        ----------
+        x, y : int
+            初期座標
+        """
         self.x = x
         self.y = y
         self.size = 40
@@ -75,7 +110,14 @@ class EnemyJump:
         self.on_ground = True
         self.glow = False
 
-    def update(self, speed):
+    def update(self, speed: float) -> None:
+        """毎フレーム呼ぶ更新処理。
+
+        - 横方向移動（speed）
+        - 光る判定（手前に来たら glow = True）
+        - on_ground のときのみジャンプを起こす
+        - 空中時は重力で落下させ、着地で復帰
+        """
         self.x -= speed  # 横移動
 
         # 光る条件
@@ -84,7 +126,7 @@ class EnemyJump:
             self.glow = True
             # 光ったらジャンプ（1回だけ）
             if self.on_ground:
-                self.vel_y = -22.7  #負の値が上方向なため大きいほどジャンプ力が大きくなる
+                self.vel_y = -23  #負の値が上方向なため大きいほどジャンプ力が大きくなる
                 self.on_ground = False  #jumpしたため地面にいない状態
         else:
             self.glow = False  #画面手前にいないときは赤色のまま
@@ -98,7 +140,8 @@ class EnemyJump:
                 self.vel_y = 0  #重力リセット
                 self.on_ground = True  #再度ジャンプ可能状態
 
-    def draw(self, screen):
+    def draw(self, screen: pygame.Surface) -> None:
+        """敵（四角）を描画する。光っているときは黄色で表示。"""
         color = (255, 255, 0) if self.glow else self.color  #光っているとき黄色
         pygame.draw.rect(screen, color, (self.x, self.y, self.size, self.size))  #四角形(画面描画,色,(左上の座標,幅と高さは正方形のため同じ))
 
@@ -113,17 +156,22 @@ distance = 0
 game_over = False
 
 def reset_game():
-    global player_x, player_y, player_vel_y, on_ground, bg_scroll, enemy_list, score, distance, game_over
+    global player_x, player_y, player_vel_y, on_ground, bg_scroll
     global enemy_list, jump_enemy_list, score, distance, game_over
+    global enemy_spawn_timer, jump_enemy_spawn_timer,current_speed
+
     player_x = 100
     player_y = floor_y - player_size[1]
     player_vel_y = 0
     on_ground = True
     bg_scroll = 0
     enemy_list = []
+    enemy_spawn_timer = 0
     jump_enemy_list = []
+    jump_enemy_spawn_timer = 0
     score = 0
     distance = 0
+    current_speed = bg_speed
     game_over = False
 
 
@@ -158,7 +206,7 @@ while True:
             on_ground = True
 
         # 背景スクロール
-        bg_scroll -= bg_speed
+        bg_scroll -= current_speed
         if bg_scroll <= -WIDTH:
             bg_scroll = 0
 
@@ -178,6 +226,14 @@ while True:
             jump_enemy_list.append(EnemyJump(enemy_x, enemy_y))
             jump_enemy_spawn_timer = 0
 
+        # スコア・距離
+        distance += bg_speed / 10
+        score = int(distance)
+
+        #スピード上昇
+        if score >= 1500:
+            current_speed = bg_speed * 1.5
+
         # 敵移動
         for enemy in enemy_list:
             enemy.x -= current_speed
@@ -189,16 +245,6 @@ while True:
         # 敵削除
         enemy_list = [e for e in enemy_list if e.x > -e.size[0]]
         jump_enemy_list = [e for e in jump_enemy_list if e.x + e.size > 0]
-
-        # スコア・距離
-        distance += bg_speed / 10
-        score = int(distance)
-
-        #スピード上昇
-        if score >= 1500:
-            current_speed = bg_speed * 1.5
-        else:
-            current_speed = bg_speed
 
         # 衝突判定
         player_rect = pygame.Rect(player_x, player_y, *player_size)
