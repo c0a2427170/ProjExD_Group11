@@ -84,7 +84,7 @@ class EnemyJump:
             self.glow = True
             # 光ったらジャンプ（1回だけ）
             if self.on_ground:
-                self.vel_y = -23  #負の値が上方向なため大きいほどジャンプ力が大きくなる
+                self.vel_y = -22.7  #負の値が上方向なため大きいほどジャンプ力が大きくなる
                 self.on_ground = False  #jumpしたため地面にいない状態
         else:
             self.glow = False  #画面手前にいないときは赤色のまま
@@ -180,11 +180,11 @@ while True:
 
         # 敵移動
         for enemy in enemy_list:
-            enemy.x -= bg_speed
+            enemy.x -= current_speed
 
         #発光ジャンプ
         for enemy in jump_enemy_list:
-            enemy.update(bg_speed)  # 横移動＋ジャンプ＋重力
+            enemy.update(current_speed)  # 横移動＋ジャンプ＋重力
 
         # 敵削除
         enemy_list = [e for e in enemy_list if e.x > -e.size[0]]
@@ -193,6 +193,12 @@ while True:
         # スコア・距離
         distance += bg_speed / 10
         score = int(distance)
+
+        #スピード上昇
+        if score >= 1500:
+            current_speed = bg_speed * 1.5
+        else:
+            current_speed = bg_speed
 
         # 衝突判定
         player_rect = pygame.Rect(player_x, player_y, *player_size)
