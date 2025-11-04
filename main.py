@@ -3,6 +3,7 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 import pygame
 import sys
 import random
+import math
 
 pygame.init()
 
@@ -13,6 +14,7 @@ BLUE = (50, 100, 255)
 RED = (255, 80, 80)
 BLACK = (0, 0, 0)
 GREEN = (80, 180, 80)
+YELLOW = (255, 230, 0)
 CYAN = (0, 255, 255)
 FPS = 60
 
@@ -77,6 +79,9 @@ class Player:
     def draw(self, screen):
         screen.blit(self.img, self.rect.topleft)
 
+    def get_rect(self):
+        return self.rect
+
 # === 敵クラス ===
 class Enemy:
     """通常の地上敵。score に応じて一定確率で大きい敵になる。
@@ -105,6 +110,29 @@ class Enemy:
     def get_rect(self) -> pygame.Rect:
         """衝突判定用の矩形を返す。"""
         return self.rect #衝突判定
+
+# === コインクラス（回転アニメーション付き） ===
+class Coin:
+    def __init__(self, x, y, radius, speed):
+        self.x = x
+        self.y = y
+        self.radius = radius
+        self.frame = random.randint(0, 60)
+        self.speed = speed
+
+    def update(self):
+        self.x -= self.speed
+        self.frame += 1
+
+    def draw(self, screen):
+        angle = (self.frame % 60) / 60 * math.pi * 2
+        scale_x = abs(math.sin(angle))
+        width = max(2, int(self.radius * 2 * scale_x))
+        height = self.radius * 2
+        pygame.draw.ellipse(screen, YELLOW, (self.x - width // 2, self.y - height // 2, width, height))
+
+    def get_rect(self):
+        return pygame.Rect(self.x - self.radius, self.y - self.radius, self.radius * 2, self.radius * 2)
 
 class EnemyJump:
     """画面手前で光り、着地状態なら勝手にジャンプする敵。
@@ -197,13 +225,16 @@ class Game:
         self.enemies = []
         self.jump_enemies = []
         self.items = []
+        self.coins = []
 
         self.enemy_timer = 0
         self.item_timer = 0
         self.jump_enemy_timer = 0
+        self.coin_timer = 0
 
         self.score = 0
         self.distance = 0
+        self.coin_score = 0
         self.game_over = False
 
     def reset(self):
@@ -237,6 +268,19 @@ class Game:
             self.items.append(Item(x, y, 30, 30, self.bg_speed + 1))
             self.item_timer = 0
 
+    def spawn_coins(self):
+        """3連続・波型コインを生成"""
+        if self.coin_timer > 300:
+            base_y = random.randint(self.floor_y - 150, self.floor_y - 60)
+            base_x = WIDTH + random.randint(0, 200)
+            offset_y = [0, -20, +20]
+            offset_x = [0, 40, 80]
+            for i in range(3):
+                cx = base_x + offset_x[i]
+                cy = base_y + offset_y[i]
+                self.coins.append(Coin(cx, cy, 10, self.bg_speed))
+            self.coin_timer = 0
+
     def update(self):
         keys = pygame.key.get_pressed()
 
@@ -252,10 +296,12 @@ class Game:
             self.enemy_timer += 1
             self.item_timer += 1
             self.jump_enemy_timer += 1
+            self.coin_timer += 1
 
             self.spawn_enemy()
             self.spawn_item()
             self.spawn_jump_enemy()
+            self.spawn_coins()
 
         current_speed = self.bg_speed
         if self.score >= 1500:
@@ -272,13 +318,19 @@ class Game:
         for item in self.items:
             item.update(current_speed)
 
+        #コイン更新
+        for coin in self.coins:
+            coin.speed = current_speed
+            coin.update()
+            
         # 敵削除
         self.enemies = [e for e in self.enemies if e.get_rect().right > 0]
         self.jump_enemies = [j for j in self.jump_enemies if j.get_rect().right > 0]
         self.items = [i for i in self.items if i.rect.right > 0]
+        self.coins = [c for c in self.coins if c.x > -c.radius * 2]
 
         self.distance += self.bg_speed / 10
-        self.score = int(self.distance)
+        self.score = int(self.distance) + self.coin_score
 
         # === 敵との接触判定（踏んだ場合は足場として扱う） ===
         player_on_enemy = False
@@ -309,6 +361,12 @@ class Game:
                 self.player.activate_powerup(duration=600)
                 self.items.remove(item)
 
+        player_rect = self.player.get_rect()
+        for coin in self.coins[:]:
+            if player_rect.colliderect(coin.get_rect()):
+                self.coin_score += 50
+                self.coins.remove(coin)
+
     def draw(self):
         self.screen.fill(WHITE)
         pygame.draw.rect(self.screen, GREEN, (self.bg_scroll, self.floor_y, WIDTH, 50))
@@ -321,7 +379,9 @@ class Game:
             jenemy.draw(self.screen)
         for item in self.items:
             item.draw(self.screen)
-
+        for coin in self.coins:
+            coin.draw(self.screen)
+            
         score_text = self.font.render(f"Score: {self.score}", True, BLACK)
         self.screen.blit(score_text, (10, 10))
 
