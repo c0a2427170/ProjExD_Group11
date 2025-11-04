@@ -40,21 +40,20 @@ class Player:
         self.powerup_active = False
         self.powerup_timer = 0
 
-    def handle_input(self, keys):
-        if keys[pygame.K_SPACE]:
-            if self.jump_count < self.max_jumps:
-                if self.jump_count == 0:
-                    self.vel_y = self.jump_power
-                else:
-                    self.vel_y = self.double_jump_power
-                self.jump_count += 1
-                self.on_ground = False
+    def handle_input(self):
+        if self.jump_count < self.max_jumps:
+            if self.jump_count == 0:
+                self.vel_y = self.jump_power
+            else:
+                self.vel_y = self.double_jump_power
+            self.jump_count += 1
+            self.on_ground = False
 
     def activate_powerup(self, duration=600):
         self.powerup_active = True
         self.max_jumps = 2
         self.powerup_timer = duration
-        self.color = CYAN  
+        self.color = CYAN
 
     def update(self):
         self.rect.y += self.vel_y
@@ -78,34 +77,108 @@ class Player:
     def draw(self, screen):
         screen.blit(self.img, self.rect.topleft)
 
-
 # === 敵クラス ===
 class Enemy:
-    def __init__(self, x, y, w, h, speed):
+    """通常の地上敵。score に応じて一定確率で大きい敵になる。
+
+    Attributes
+    ----------
+    x, y : int
+        敵の左上座標
+    size : tuple[int, int]
+        (幅, 高さ)
+    type : str
+        "normal" または "big"
+    """
+    def __init__(self, x, y, w, h, speed, enemy_type="normal"):
         self.rect = pygame.Rect(x, y, w, h)
-        self.color = RED
+        self.type = enemy_type  # "normal" or "big"
+        self.color = RED if self.type == "normal" else (180, 0, 0) #normalじゃない敵の色を濃くする
         self.speed = speed
 
-    def update(self):
-        self.rect.x -= self.speed
+    def update(self, current_speed):
+        self.rect.x -= int(current_speed)
 
     def draw(self, screen):
         pygame.draw.rect(screen, self.color, self.rect)
 
+    def get_rect(self) -> pygame.Rect:
+        """衝突判定用の矩形を返す。"""
+        return self.rect #衝突判定
+
+class EnemyJump:
+    """画面手前で光り、着地状態なら勝手にジャンプする敵。
+
+    - 光る距離は固定（0 < x < 250）
+    - ジャンプは on_ground が True のときに一回だけ発動し、着地で再度可能になる
+    """
+    def __init__(self, x: int, y: int, floor_y: int) -> None:
+        """EnemyJump を初期化する。
+
+        Parameters
+        ----------
+        x, y : int
+            初期座標
+        """
+        self.x = x
+        self.y = y
+        self.size = 40
+        self.color = RED
+        self.vel_y = 0
+        self.on_ground = True
+        self.glow = False
+        self.floor_y = floor_y
+
+    def update(self, speed: float) -> None:
+        """毎フレーム呼ぶ更新処理。
+
+        - 横方向移動（speed）
+        - 光る判定（手前に来たら glow = True）
+        - on_ground のときのみジャンプを起こす
+        - 空中時は重力で落下させ、着地で復帰
+        """
+        self.x -= speed  # 横移動
+
+        # 光る条件
+        if 0 < self.x < 250:  # 画面手前で光る
+
+            self.glow = True
+            # 光ったらジャンプ（1回だけ）
+            if self.on_ground:
+                self.vel_y = -23  #負の値が上方向なため大きいほどジャンプ力が大きくなる
+                self.on_ground = False  #jumpしたため地面にいない状態
+        else:
+            self.glow = False  #画面手前にいないときは赤色のまま
+
+        # 重力
+        if not self.on_ground:  #空中にいるとき
+            self.vel_y += 0.8   #重力を加算していく(下方向の加速度)
+            self.y += self.vel_y  #位置更新
+            if self.y + self.size >= self.floor_y:  #敵の下端が床の座標に到達したら
+                self.y = self.floor_y - self.size  #床に接する位置に修正
+                self.vel_y = 0  #重力リセット
+                self.on_ground = True  #再度ジャンプ可能状態
+
+    def draw(self, screen: pygame.Surface) -> None:
+        """敵（四角）を描画する。光っているときは黄色で表示。"""
+        color = (255, 255, 0) if self.glow else self.color  #光っているとき黄色
+        pygame.draw.rect(screen, color, (self.x, self.y, self.size, self.size))  #四角形(画面描画,色,(左上の座標,幅と高さは正方形のため同じ))
+
+    def get_rect(self) -> pygame.Rect:
+        return pygame.Rect(int(self.x), int(self.y), self.size, self.size)
 
 # === アイテムクラス ===
 class Item:
     def __init__(self, x, y, w, h, speed, color=CYAN):
         self.rect = pygame.Rect(x, y, w, h)
         self.color = color
-        self.speed = speed
+        self.speed = speed 
 
-    def update(self):
-        self.rect.x -= self.speed
+    def update(self, current_speed):
+        self.rect.x -= int(current_speed)
 
     def draw(self, screen):
         pygame.draw.rect(screen, self.color, self.rect)
-
 
 # === ゲーム管理クラス ===
 class Game:
@@ -120,10 +193,15 @@ class Game:
         self.bg_speed = 4
 
         self.player = Player(100, self.floor_y - 60, 40, 60, self.floor_y)
+
         self.enemies = []
+        self.jump_enemies = []
         self.items = []
+
         self.enemy_timer = 0
         self.item_timer = 0
+        self.jump_enemy_timer = 0
+
         self.score = 0
         self.distance = 0
         self.game_over = False
@@ -134,9 +212,23 @@ class Game:
     def spawn_enemy(self):
         if self.enemy_timer > 90:
             x = WIDTH + random.randint(0, 300)
-            y = self.floor_y - 40
-            self.enemies.append(Enemy(x, y, 40, 40, self.bg_speed))
+            if self.score >= 1000 and random.random() < 0.3:
+                w, h = 60, 60
+                enemy_type = "big"
+            else:
+                w, h = 40, 40
+                enemy_type = "normal"
+            y = self.floor_y - h
+            self.enemies.append(Enemy(x, y, w, h, self.bg_speed, enemy_type))
             self.enemy_timer = 0
+
+    def spawn_jump_enemy(self):
+        # スコアが一定以上でジャンプ敵が出るようにする
+        if self.score >= 500 and self.jump_enemy_timer > 500:
+            x = WIDTH + random.randint(0, 200)
+            y = self.floor_y - 40
+            self.jump_enemies.append(EnemyJump(x, y, self.floor_y))
+            self.jump_enemy_timer = 0
 
     def spawn_item(self):
         if self.item_timer > 600:
@@ -148,6 +240,9 @@ class Game:
     def update(self):
         keys = pygame.key.get_pressed()
 
+        if self.game_over:
+            return
+
         if not self.game_over:
             self.player.update()
             self.bg_scroll -= self.bg_speed
@@ -156,48 +251,63 @@ class Game:
 
             self.enemy_timer += 1
             self.item_timer += 1
+            self.jump_enemy_timer += 1
+
             self.spawn_enemy()
             self.spawn_item()
+            self.spawn_jump_enemy()
 
-            for enemy in self.enemies:
-                enemy.update()
-            for item in self.items:
-                item.update()
+        current_speed = self.bg_speed
+        if self.score >= 1500:
+            current_speed = self.bg_speed * 1.5
 
-            # 敵・アイテムが画面外に出たら削除
-            self.enemies = [e for e in self.enemies if e.rect.right > 0]
-            self.items = [i for i in self.items if i.rect.right > 0]
+         # 敵更新
+        for enemy in self.enemies:
+            enemy.update(current_speed)
 
-            self.distance += self.bg_speed / 10
-            self.score = int(self.distance)
+        for jenemy in self.jump_enemies:
+            jenemy.update(current_speed)
 
-            # === 敵との接触判定（踏んだ場合は足場として扱う） ===
-            player_on_enemy = False
-            for enemy in self.enemies:
-                if self.player.rect.colliderect(enemy.rect):
-                    # 上から接触した場合
-                    if self.player.vel_y > 0 and self.player.rect.bottom - enemy.rect.top < 20:
-                        self.player.rect.bottom = enemy.rect.top
-                        self.player.vel_y = 0
-                        self.player.jump_count = 0
-                        player_on_enemy = True
-                    else:
-                        # 横または下から接触 → ゲームオーバー
-                        self.game_over = True
+        # アイテム更新
+        for item in self.items:
+            item.update(current_speed)
 
-            # 敵の上にいない＆地面にもいないときは重力で落下
-            if not player_on_enemy and self.player.rect.bottom < self.floor_y:
-                self.player.on_ground = False
+        # 敵削除
+        self.enemies = [e for e in self.enemies if e.get_rect().right > 0]
+        self.jump_enemies = [j for j in self.jump_enemies if j.get_rect().right > 0]
+        self.items = [i for i in self.items if i.rect.right > 0]
 
-            # === アイテム取得判定 ===
-            for item in self.items[:]:
-                if self.player.rect.colliderect(item.rect):
-                    self.player.activate_powerup(duration=600)
-                    self.items.remove(item)
+        self.distance += self.bg_speed / 10
+        self.score = int(self.distance)
 
-        else:
-            if keys[pygame.K_r]:
-                self.reset()
+        # === 敵との接触判定（踏んだ場合は足場として扱う） ===
+        player_on_enemy = False
+        for enemy in self.enemies:
+            if self.player.rect.colliderect(enemy.rect):
+                # 上から接触した場合
+                if self.player.vel_y > 0 and self.player.rect.bottom - enemy.rect.top < 20:
+                    self.player.rect.bottom = enemy.rect.top
+                    self.player.vel_y = 0
+                    self.player.jump_count = 0
+                    player_on_enemy = True
+                else:
+                    # 横または下から接触 → ゲームオーバー
+                    self.game_over = True
+
+        #ジャンプ敵との衝突（どの方向でも即ゲームオーバー）
+        for jenemy in self.jump_enemies:
+            if self.player.rect.colliderect(jenemy.get_rect()):
+                self.game_over = True
+        
+        # 敵の上にいない＆地面にもいないときは重力で落下
+        if not player_on_enemy and self.player.rect.bottom < self.floor_y:
+            self.player.on_ground = False
+
+        # === アイテム取得判定 ===
+        for item in self.items[:]:
+            if self.player.rect.colliderect(item.rect):
+                self.player.activate_powerup(duration=600)
+                self.items.remove(item)
 
     def draw(self):
         self.screen.fill(WHITE)
@@ -207,6 +317,8 @@ class Game:
         self.player.draw(self.screen)
         for enemy in self.enemies:
             enemy.draw(self.screen)
+        for jenemy in self.jump_enemies:
+            jenemy.draw(self.screen)
         for item in self.items:
             item.draw(self.screen)
 
@@ -233,9 +345,16 @@ class Game:
                 if event.type == pygame.QUIT:
                     pygame.quit()
                     sys.exit()
-                if not self.game_over and event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_SPACE:
-                        self.player.handle_input(pygame.key.get_pressed())
+                # KEYDOWN は常にチェックして内部で game_over を判定する
+                if event.type == pygame.KEYDOWN:
+                    if not self.game_over:
+                        if event.key == pygame.K_SPACE:
+                            # ジャンプ（押した瞬間）
+                            self.player.handle_input()
+                    else:
+                        # game_over == True のときのみ R でリセット
+                        if event.key == pygame.K_r:
+                            self.reset()
 
             self.update()
             self.draw()
@@ -243,4 +362,5 @@ class Game:
 
 # === メイン処理 ===
 if __name__ == "__main__":
-    Game().run()
+    Game().run() 
+
