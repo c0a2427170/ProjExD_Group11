@@ -1,7 +1,7 @@
 import pygame
 import sys
 import random
-import os # ファイル操作のために追加
+import os  # ファイル操作のために追加
 
 pygame.init()
 
@@ -35,7 +35,7 @@ def load_highscore():
             try:
                 # ファイルから読み込んだ文字列を整数に変換
                 return int(f.read())
-            except ValueError: # ファイル内容が数字でなかった場合
+            except ValueError:  # ファイル内容が数字でなかった場合
                 return 0
     return 0
 
@@ -50,15 +50,18 @@ def save_highscore(score):
 # 音声ファイルのロード
 try:
     # BGM（メインループで再生）
-    pygame.mixer.music.load("~~~.mp3")  #ここにメインbgmのファイル名を入れる
+    pygame.mixer.music.load("bgm1.mp3")  # ここにメインbgmのファイル名を入れる
     # # 効果音
-    jump_sound = pygame.mixer.Sound("---.mp3")  #ここにジャンプの効果音のファイル名を入れる
-    game_over_sound = pygame.mixer.Sound("===.mp3")  #ここにゲームオーバー時に流すbgmファイル名を入れる
+    jump_sound = pygame.mixer.Sound("bgm2.mp3")  # ここにジャンプの効果音のファイル名を入れる
+    game_over_sound = pygame.mixer.Sound("bgm2.mp3")  # ここにゲームオーバー時に流すbgmファイル名を入れる
 except pygame.error as e:
     print(f"音楽ファイルのロードに失敗しました: {e}")
     # ファイルが見つからない場合は、エラーを無視してゲームを続行
     jump_sound = None
     game_over_sound = None
+    # BGMファイルが見つからない場合も再生しないようにします
+    # (ただし、music.play()はtryの外にあるため、load失敗時はそこでエラーになる可能性を考慮)
+    # → tryブロック外の music.play() の前にチェックを追加します。
 
 # 床
 floor_y = HEIGHT - 40
@@ -85,14 +88,19 @@ enemy_spawn_timer = 0
 font = pygame.font.SysFont(None, 40)
 score = 0
 distance = 0
-high_score = load_highscore() # <-- 起動時にハイスコアをロード
+high_score = load_highscore()  # <-- 起動時にハイスコアをロード
 
 # ゲーム状態
 game_over = False
 
 # BGMの再生開始 (ループ再生: -1)
-if pygame.mixer.music.get_busy() == False:
-    pygame.mixer.music.play(-1)
+# (注: BGMファイルが正常にロードされた場合のみ再生)
+try:
+    if pygame.mixer.music.get_busy() == False:
+        pygame.mixer.music.play(-1)
+except pygame.error:
+    print("BGMの再生に失敗しました（ファイルがロードされていない可能性があります）")
+
 
 def reset_game():
     global player_x, player_y, player_vel_y, on_ground, bg_scroll, enemy_list, score, distance, game_over
@@ -105,10 +113,14 @@ def reset_game():
     score = 0
     distance = 0
     game_over = False
-    
-    # BGMの再生再開
-    if not pygame.mixer.music.get_busy():
-        pygame.mixer.music.play(-1)
+
+    # BGMの再生再開 (ロードに成功していれば)
+    try:
+        if not pygame.mixer.music.get_busy():
+            pygame.mixer.music.play(-1)
+    except pygame.error:
+        # BGMがロードされていない場合は何もしない
+        pass
 
 # メインループ
 while True:
@@ -150,7 +162,9 @@ while True:
 
         # 敵生成
         enemy_spawn_timer += 1
-        if enemy_spawn_timer > 90:
+        # (難易度調整：スコアが上がると敵の出現間隔を短くする例)
+        spawn_interval = max(45, 90 - (score // 100)) # 90フレームから徐々に短縮、最低45フレーム
+        if enemy_spawn_timer > spawn_interval: # 元のコード: 90
             enemy_x = WIDTH + random.randint(0, 300)
             enemy_y = floor_y - enemy_size[1]
             enemy_list.append([enemy_x, enemy_y])
@@ -173,17 +187,20 @@ while True:
             enemy_rect = pygame.Rect(enemy[0], enemy[1], *enemy_size)
             if player_rect.colliderect(enemy_rect):
                 game_over = True
-                
+
                 # ==================================================
                 # ハイスコア更新チェックと保存
                 if score > high_score:
                     high_score = score
                     save_highscore(high_score)
                 # ==================================================
-                
+
                 # ゲームオーバー時の処理
                 # BGMの停止
-                pygame.mixer.music.stop()
+                try:
+                    pygame.mixer.music.stop()
+                except pygame.error:
+                    pass
                 # ゲームオーバー効果音の再生
                 if game_over_sound:
                     game_over_sound.play()
@@ -214,11 +231,13 @@ while True:
     # ゲームオーバー表示
     if game_over:
         over_text = font.render("GAME OVER - Press R to Restart", True, RED)
-        screen.blit(over_text, (WIDTH//2 - 220, HEIGHT//2 - 20))
-        
+        over_rect = over_text.get_rect(center=(WIDTH // 2, HEIGHT // 2))
+        screen.blit(over_text, over_rect)
+
         # ゲームオーバー時にハイスコアを更新した場合は強調表示
-        if score == high_score:
-             new_record_text = font.render("NEW HIGH SCORE!", True, RED)
-             screen.blit(new_record_text, (WIDTH//2 - new_record_text.get_width()//2, HEIGHT//2 + 30))
+        if score == high_score and score > 0: # スコアが0より大きい場合のみ表示
+            new_record_text = font.render("NEW HIGH SCORE!", True, RED)
+            new_record_rect = new_record_text.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 40))
+            screen.blit(new_record_text, new_record_rect)
 
     pygame.display.update()
