@@ -1,3 +1,5 @@
+import os
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 import pygame
 import sys
 import random
@@ -23,13 +25,16 @@ GREEN = (80, 180, 80)
 floor_y = HEIGHT - 40
 
 # プレイヤー設定
-player_size = (40, 60)
+player_size = (48, 68)
 player_x = 100
 player_y = floor_y - player_size[1]
 player_vel_y = 0
 gravity = 0.8
 jump_power = -15
 on_ground = True
+player_img = pygame.image.load("fig/5 .png").convert_alpha()
+player_img = pygame.transform.flip(player_img, True, False)
+player_img = pygame.transform.scale(player_img, player_size)
 
 # 背景スクロール
 bg_scroll = 0
@@ -116,10 +121,25 @@ while True:
 
         # 衝突判定
         player_rect = pygame.Rect(player_x, player_y, *player_size)
+        on_ground = False  # 最初は空中扱い
         for enemy in enemy_list:
             enemy_rect = pygame.Rect(enemy[0], enemy[1], *enemy_size)
             if player_rect.colliderect(enemy_rect):
-                game_over = True
+                # プレイヤーが上から落下中かつ敵の上面に近い位置で接触
+                if player_vel_y > 0 and player_y + player_size[1] - enemy_rect.top < 20:
+                    # 敵の上に乗る
+                    player_y = enemy_rect.top - player_size[1]
+                    player_vel_y = 0
+                    on_ground = True
+                else:
+                    # 横や下からぶつかったらゲームオーバー
+                    game_over = True
+
+        # 床との接触判定（敵の上にいない場合）
+        if player_y + player_size[1] >= floor_y:
+            player_y = floor_y - player_size[1]
+            player_vel_y = 0
+            on_ground = True
 
     # ===== 描画 =====
     # 背景（床のスクロール）
@@ -127,7 +147,7 @@ while True:
     pygame.draw.rect(screen, GREEN, (bg_scroll + WIDTH, floor_y, WIDTH, 50))
 
     # プレイヤー
-    pygame.draw.rect(screen, BLUE, (player_x, player_y, *player_size))
+    screen.blit(player_img, (player_x, player_y))
 
     # 敵
     for enemy in enemy_list:
