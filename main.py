@@ -32,7 +32,7 @@ player_vel_y = 0
 gravity = 0.8
 jump_power = -15
 on_ground = True
-player_img = pygame.image.load("fig/5 .png").convert_alpha()
+player_img = pygame.image.load("fig/5.png").convert_alpha()
 player_img = pygame.transform.flip(player_img, True, False)
 player_img = pygame.transform.scale(player_img, player_size)
 
