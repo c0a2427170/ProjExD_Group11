@@ -249,11 +249,15 @@ class Game:
             pygame.mixer.music.load("bgm1.mp3")
             self.jump_sound = pygame.mixer.Sound("bgm2.mp3")
             self.game_over_sound = pygame.mixer.Sound("bgm3.mp3")
+            self.coin_sound = pygame.mixer.Sound("coin.mp3")  # コイン取得音
+            self.item_sound = pygame.mixer.Sound("item.mp3")  # アイテム取得音
             self.bgm_loaded = True
         except pygame.error as e:
             print(f"音楽ファイルのロードに失敗しました: {e}")
             self.jump_sound = None
             self.game_over_sound = None
+            self.coin_sound = None
+            self.item_sound = None
             self.bgm_loaded = False
 
         # BGMの再生開始（統合）
@@ -418,12 +422,16 @@ class Game:
             if self.player.rect.colliderect(item.rect):
                 self.player.activate_powerup(duration=600)
                 self.items.remove(item)
+                if self.item_sound:
+                    self.item_sound.play()
 
         player_rect = self.player.get_rect()
         for coin in self.coins[:]:
             if player_rect.colliderect(coin.get_rect()):
                 self.coin_score += 50
                 self.coins.remove(coin)
+                if self.coin_sound:
+                    self.coin_sound.play()
 
     def draw(self):
         self.screen.fill(WHITE)
