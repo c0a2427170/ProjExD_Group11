@@ -313,15 +313,42 @@ class Game:
                 w, h = 40, 40
                 enemy_type = "normal"
             y = self.floor_y - h
-            self.enemies.append(Enemy(x, y, w, h, self.bg_speed, enemy_type))
-            self.enemy_timer = 0
+            #重複チェック
+            new_enemy_rect = pygame.Rect(x, y, w, h)
+            is_overlapping = False
+            for enemy in self.enemies:
+                if new_enemy_rect.colliderect(enemy.get_rect()):
+                    is_overlapping = True
+                    break
+            if not is_overlapping:
+                for jenemy in self.jump_enemies:
+                    if new_enemy_rect.colliderect(jenemy.get_rect()):
+                        is_overlapping = True
+                        break
+                        
+            if not is_overlapping:
+                self.enemies.append(Enemy(x, y, w, h, self.bg_speed, enemy_type))
+                self.enemy_timer = 0
 
     def spawn_jump_enemy(self):
         if self.score >= 500 and self.jump_enemy_timer > 500:
             x = WIDTH + random.randint(0, 200)
             y = self.floor_y - 40
-            self.jump_enemies.append(EnemyJump(x, y, self.floor_y))
-            self.jump_enemy_timer = 0
+            #重複チェック
+            new_enemy_rect = pygame.Rect(x, y, 40, 40)
+            is_overlapping = False
+            for enemy in self.enemies:
+                if new_enemy_rect.colliderect(enemy.get_rect()):
+                    is_overlapping = True
+                    break
+            if not is_overlapping:
+                for jenemy in self.jump_enemies:
+                    if new_enemy_rect.colliderect(jenemy.get_rect()):
+                        is_overlapping = True
+                        break
+            if not is_overlapping:
+                self.jump_enemies.append(EnemyJump(x, y, self.floor_y))
+                self.jump_enemy_timer = 0
 
     def spawn_item(self):
         if self.item_timer > 600:
