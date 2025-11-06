@@ -1,5 +1,5 @@
-# 
-
+# 走れこうかとん！！！
+![title](fig/game.png)
 ## 
 * python >= 3.10
 * pygame >= 2.1
