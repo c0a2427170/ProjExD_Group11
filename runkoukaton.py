@@ -215,7 +215,7 @@ class Item:
 class Game:
     def __init__(self):
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
-        pygame.display.set_caption("ジャンプ強化アクション（音声・ハイスコア対応版）")
+        pygame.display.set_caption("走れこうかとん！！！")
         self.clock = pygame.time.Clock()
         self.font = pygame.font.SysFont(None, 40)
 
